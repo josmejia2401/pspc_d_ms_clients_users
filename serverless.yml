@@ -1,0 +1,411 @@
+# serverless.yml
+#https://www.serverless.com/framework/docs/providers/aws/guide/serverless.yml
+
+# custom
+custom:
+  appName: pspc
+  domainName: clients
+  serviceName: users
+  bucketName: '${self:provider.stage}-${self:custom.appName}-${self:custom.domainName}-${self:custom.serviceName}-bucket'
+  stackName: '${self:provider.stage}-${self:custom.appName}-${self:custom.domainName}-${self:custom.serviceName}-stack'
+  usersTableName: '${self:provider.stage}_${self:custom.appName}_users'
+  loggerMode: ALL
+  dynamodb:
+    start:
+      migrated: true
+  # serverless offline plugin setup
+  serverless-offline:
+    httpPort: 4000
+
+# Service name
+service: '${self:custom.appName}-${self:custom.domainName}-${self:custom.serviceName}'
+# Framework version constraint (semver constraint): '3', '^2.33'
+frameworkVersion: '3'
+# plugins
+plugins:
+  - serverless-offline
+  #- serverless-plugin-include-dependencies
+  - serverless-deployment-bucket
+  - serverless-iam-roles-per-function
+
+# providers
+provider:
+  name: aws
+  # Default stage (default: dev)
+  stage: ${opt:stage, 'dev'}
+  # Default region (default: us-east-1)
+  region: ${opt:region, 'us-east-1'}
+  # The AWS profile to use to deploy (default: "default" profile)
+  profile: default
+  # runtime
+  runtime: nodejs14.x
+  # Use a custom name for the CloudFormation stack
+  stackName: ${self:custom.stackName}
+  # Default memory size for functions (default: 1024MB)
+  memorySize: 128
+  # Processor architecture: 'x86_64' or 'arm64' via Graviton2 (default: x86_64)
+  architecture: arm64
+  # Default timeout for functions (default: 6 seconds)
+  # Note: API Gateway has a maximum timeout of 30 seconds
+  timeout: 15
+  # Duration for CloudWatch log retention (default: forever)
+  logRetentionInDays: 1
+  lambdaHashingVersion: 20201221
+  # Use function versioning (enabled by default)
+  versionFunctions: false
+  tracing:
+    # Can only be true if API Gateway is inside a stack.
+    apiGateway: true
+    # Optional, can be true (true equals 'Active'), 'Active' or 'PassThrough'
+    lambda: true
+  # Configure the S3 bucket used by Serverless Framework to deploy code packages to Lambda
+  # serverless-deployment-bucket
+  deploymentBucket:
+    # Name of an existing bucket to use (default: created by serverless)
+    name: ${self:custom.bucketName}
+    # On deployment, serverless prunes artifacts older than this limit (default: 5)
+    maxPreviousDeploymentArtifacts: 1
+    # Enable bucket versioning (default: false)
+    versioning: false
+    blockPublicAccess: true
+    serverSideEncryption: AES256
+    # Specific tags
+    tags:
+      barbapp:application: barbapp
+      barbapp:component: users
+      barbapp:creator: jose.mejia
+      barbapp:domain-name: clients
+      barbapp:layer: application #application, network, integration, storage
+
+  #https://www.serverless.com/framework/docs/providers/aws/guide/serverless.yml/#api-gateway-v1-rest-api-1
+  # Use a custom name for the API Gateway API
+  #apiName: '${self:provider.stage}-${self:service}'
+  # Endpoint type for API Gateway REST API: edge or regional (default: edge)
+  endpointType: REGIONAL
+  # Optional API Gateway REST API global config
+  #apiGateway:
+    # Description for the API Gateway stage deployment
+  #  description: API para administrar los usuarios
+    # Optional detailed Cloud Watch Metrics
+  #  metrics: false
+  # Global environments
+  environment:
+    DYNDB_USERS_TBL: ${self:custom.usersTableName}
+    STAGE: ${self:provider.stage}
+    REGION: ${self:provider.region}
+    APP_NAME: ${self:custom.appName}
+    SERVICE_NAME: ${self:custom.serviceName}
+    DOMAIN_NAME: ${self:custom.domainName}
+    LOGGER_MODE: ${self:custom.loggerMode}
+    JTW_SECRET_VALUE: '${self:custom.appName}/18564B1D2DD86179A51363A991CBE'
+    JWT_TOKEN_LIFE: '365d'
+
+  # Global tags
+  tags:
+    barbapp:application: barbapp
+    barbapp:component: users
+    barbapp:creator: jose.mejia
+    barbapp:domain-name: clients
+    barbapp:layer: application #application, network, integration, storage
+
+  #stackTags:
+    #barbapp:application-id: barbapp
+    #barbapp:component-id: security-users
+    #barbapp:component-name: security-users
+    #barbapp:creator-name: security-users
+    #barbapp:creator-id: security-users
+    #barbapp:domain-name: security
+    #barbapp:layer: application #storage, network, integration
+
+package:
+  # Package this function as an individual artifact (default: false)
+  individually: false
+  patterns:
+    - node_modules/aws-sdk/**
+    - node_modules/aws-lambda/**
+    - package-lock.json
+    - src/**
+    - .gitignore
+    - .git/**
+
+functions:
+  create-user:
+    name: ${self:provider.stage}-${self:service}-post-create-user-http
+    description: Create a user
+    handler: dist/application/aws/user-handler.createUserHandler
+    iamRoleStatementsName: ${self:provider.stage}-${self:service}-post-create-user-http-role
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+          - dynamodb:Scan
+          - dynamodb:PutItem
+          #- dynamodb:GetItem
+          #- dynamodb:UpdateItem
+          #- dynamodb:DeleteItem
+        Resource:
+          - { "Fn::GetAtt": ["UsersDynamoDBTable", "Arn"] }
+          - { "Fn::Join": [ "/", [ { "Fn::GetAtt": ["UsersDynamoDBTable", "Arn" ] }, "index", "UsernameIndex" ]]}
+      #- Effect: Allow
+      #  Action:
+      #    - lambda:InvokeFunction
+      #    - lambda:InvokeAsync
+      #  Resource:
+      #    - "*"
+      #    #- "arn:aws:lambda:${self:provider.region}:${AWS:AccountId}:function:${self:provider.stage}-common-notifications-send-sms"
+    #httpApi:
+    #  payload: '2.0'
+    #https://www.serverless.com/framework/docs/providers/aws/guide/serverless.yml/#api-gateway-v1-rest-api-1
+    events:
+      - http:
+          method: POST
+          # Enable CORS. Don't forget to return the right header in your response
+          cors:
+            origin: '*' # <-- Specify allowed origin
+            headers: '*' # <-- Specify allowed headers
+              #- Content-Type
+              #- X-Amz-Date
+              #- Authorization
+              #- X-Api-Key
+              #- X-Amz-Security-Token
+              #- X-Amz-User-Agent
+              #- Access-Control-Allow-Origin
+            allowCredentials: false
+          # Requires clients to add API keys values in the `x-api-key` header of their request
+          private: false
+          path: /${self:custom.appName}/${self:custom.domainName}/${self:custom.serviceName}
+
+  user-by-token:
+    name: ${self:provider.stage}${self:service}-get-user-by-token-http
+    description: Get a user info by token
+    handler: dist/application/aws/user-handler.getUserByTokenHandler
+    iamRoleStatementsName: ${self:provider.stage}-${self:service}-get-user-by-token-role
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+          - dynamodb:Scan
+        Resource:
+          - { "Fn::GetAtt": ["UsersDynamoDBTable", "Arn"] }
+    events:
+      - http:
+          method: GET
+          # Enable CORS. Don't forget to return the right header in your response
+          cors:
+            origin: '*' # <-- Specify allowed origin
+            headers: # <-- Specify allowed headers
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+          # Requires clients to add API keys values in the `x-api-key` header of their request
+          private: false
+          path: /${self:custom.appName}/${self:custom.domainName}/${self:custom.serviceName}
+          authorizer:
+          #  name: authorizer
+          #  resultTtlInSeconds: 0
+          #  identitySource: method.request.header.Authorization, context.identity.sourceIp
+          #  type: token #request
+            type: "TOKEN"
+            authorizerId: 
+              Ref: PSPCApiGatewayAuthorizer
+
+  update-user:
+    name: ${self:provider.stage}-${self:service}-put-update-user-http
+    description: Update a user info by token
+    handler: dist/application/aws/user-handler.updateUserHandler
+    iamRoleStatementsName: ${self:provider.stage}-${self:service}-put-update-user-http-role
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+        Resource:
+          - { "Fn::GetAtt": ["UsersDynamoDBTable", "Arn"] }
+    events:
+      # https://www.serverless.com/framework/docs/providers/aws/events/http-api/
+      - http:
+          method: put
+          # Enable CORS. Don't forget to return the right header in your response
+          cors:
+            origin: '*' # <-- Specify allowed origin
+            headers: # <-- Specify allowed headers
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+          # Requires clients to add API keys values in the `x-api-key` header of their request
+          private: false
+          path: /${self:custom.appName}/${self:custom.domainName}/${self:custom.serviceName}
+          authorizer:
+          #  name: authorizer
+          #  resultTtlInSeconds: 0
+          #  identitySource: method.request.header.Authorization, context.identity.sourceIp
+          #  type: token #request
+            type: "TOKEN"
+            authorizerId: 
+              Ref: PSPCApiGatewayAuthorizer
+
+  delete-user:
+    name: ${self:provider.stage}-${self:service}-delete-rm-user-http
+    description: Delete a by token
+    handler: dist/application/aws/user-handler.deleteUserByTokenHandler
+    iamRoleStatementsName: ${self:provider.stage}-${self:service}-delete-rm-user-http-role
+    #timeout: 10
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:DeleteItem
+        Resource:
+          - { "Fn::GetAtt": ["UsersDynamoDBTable", "Arn"] }
+      - Effect: Allow
+        Action:
+          - lambda:InvokeFunction
+          - lambda:InvokeAsync
+        Resource:
+          - "*"
+    events:
+      - http:
+          method: DELETE
+          # Enable CORS. Don't forget to return the right header in your response
+          cors:
+            origin: '*' # <-- Specify allowed origin
+            headers: # <-- Specify allowed headers
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+          # Requires clients to add API keys values in the `x-api-key` header of their request
+          private: false
+          path: /${self:custom.appName}/${self:custom.domainName}/${self:custom.serviceName}
+          authorizer:
+          #  name: authorizer
+          #  resultTtlInSeconds: 0
+          #  identitySource: method.request.header.Authorization, context.identity.sourceIp
+          #  type: token #request
+            type: "TOKEN"
+            authorizerId: 
+              Ref: PSPCApiGatewayAuthorizer
+
+  get-user-by-username-password:
+    name: ${self:provider.stage}-${self:service}-get-user-by-username-and-pass
+    description: Get user by username and password
+    handler: dist/application/aws/user-handler.userGetUsernamePasswordHandler
+    iamRoleStatementsName: ${self:provider.stage}-${self:service}-get-user-by-username-and-pass-role
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - dynamodb:Query
+        Resource:
+          - { "Fn::GetAtt": ["UsersDynamoDBTable", "Arn"] }
+          - { "Fn::Join": [ "/", [ { "Fn::GetAtt": ["UsersDynamoDBTable", "Arn" ] }, "index", "UsernameIndex" ]]}
+
+#https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadWriteCapacityMode.html
+resources:
+  Resources:
+    UsersDynamoDBTable:
+      Type: 'AWS::DynamoDB::Table'
+      Properties:
+        TableName: ${self:custom.usersTableName}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - 
+            AttributeName: id
+            AttributeType: S
+          - 
+            AttributeName: username
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: UsernameIndex
+            KeySchema:
+              - AttributeName: username
+                KeyType: HASH
+            Projection:
+              ProjectionType: 'ALL'
+
+    ApiGatewayRestApi:
+      Type: AWS::ApiGateway::RestApi
+      Properties:
+        Name: '${self:provider.stage}-${self:service}'
+        Description: 'API para administrar las usuarios'
+        #EndpointConfiguration: REGIONAL
+
+    # This response is needed for custom authorizer failures cors support. https://docs.aws.amazon.com/apigateway/latest/developerguide/supported-gateway-response-types.html
+    ExpiredGatewayResponse:
+      Type: 'AWS::ApiGateway::GatewayResponse'
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        ResponseType: EXPIRED_TOKEN
+        ResponseTemplates:
+          application/json: |
+            {
+              "success":false,
+              "message":"Token Expired",
+              "requestId":"$context.requestId"
+            }
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+        StatusCode: '401'
+
+    AuthFailureGatewayResponse:
+      Type: 'AWS::ApiGateway::GatewayResponse'
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        ResponseTemplates:
+            application/json: |
+              {
+                "message":$context.error.messageString,
+                "requestId":"$context.requestId"
+              }
+        ResponseType: UNAUTHORIZED
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+        StatusCode: '401'
+
+    DenyFailureGatewayResponse:
+      Type: 'AWS::ApiGateway::GatewayResponse'
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        ResponseTemplates:
+            #https://stackoverflow.com/a/49806967/10212963
+            application/json: |
+              {
+                "message":$context.authorizer.customErrorMessage,
+                "requestId":"$context.requestId"
+              }
+        ResponseType: ACCESS_DENIED
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+        StatusCode: '403'
+
+    PSPCApiGatewayAuthorizer:
+      Type: "AWS::ApiGateway::Authorizer"
+      Properties:
+        AuthorizerResultTtlInSeconds: 0
+        Name: "authorizer"
+        AuthorizerUri: !Sub "arn:aws:apigateway:${self:provider.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:${AWS::AccountId}:function:${self:provider.stage}-barbapp-security-auth-post-authorizer/invocations"
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+        Type: "TOKEN"
+        IdentitySource: "method.request.header.Authorization"
+      DependsOn:
+        - "ApiGatewayRestApi"
