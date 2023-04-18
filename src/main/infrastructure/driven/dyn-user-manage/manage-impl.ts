@@ -115,7 +115,7 @@ export class UserManageImpl implements UserManage {
             const params = {
                 TableName: Constants.AWS_DYNAMODB.DYNDB_USERS_TBL,
                 Key: {
-                    "id": { "S": id }
+                    "id": { "S": `${id}` }
                 },
                 UpdateExpression: update_expression,
                 ExpressionAttributeValues: attributes.expressionAttributeValues,
@@ -134,7 +134,7 @@ export class UserManageImpl implements UserManage {
             const params = {
                 TableName: Constants.AWS_DYNAMODB.DYNDB_USERS_TBL,
                 Key: {
-                    "id": { "S": id }
+                    "id": { "S": `${id}` }
                 },
                 ConditionExpression: "#userId=:userId",
                 ExpressionAttributeValues: {
