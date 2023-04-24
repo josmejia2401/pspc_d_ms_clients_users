@@ -16,6 +16,11 @@ custom:
   # serverless offline plugin setup
   serverless-offline:
     httpPort: 4000
+  webpack:
+    webpackConfig: 'webpack.config.js' # Name of webpack configuration file
+    includeModules: false # Node modules configuration for packaging
+    packager: 'npm' # Packager that will be used to package your external modules
+    excludeFiles: src/**/*.test.js # Provide a glob for files to ignore
 
 # Service name
 service: '${self:custom.appName}-${self:custom.domainName}-${self:custom.serviceName}'
@@ -23,6 +28,7 @@ service: '${self:custom.appName}-${self:custom.domainName}-${self:custom.service
 frameworkVersion: '3'
 # plugins
 plugins:
+  - serverless-webpack
   - serverless-offline
   #- serverless-plugin-include-dependencies
   - serverless-deployment-bucket
@@ -132,7 +138,7 @@ functions:
   create-user:
     name: ${self:provider.stage}-${self:service}-post-create-user-http
     description: Create a user
-    handler: dist/application/aws/user-handler.createUserHandler
+    handler: dist/application/aws/create-handler.createUserHandler
     iamRoleStatementsName: ${self:provider.stage}-${self:service}-post-create-user-http-role
     iamRoleStatements:
       - Effect: Allow
@@ -178,7 +184,7 @@ functions:
   user-by-token:
     name: ${self:provider.stage}${self:service}-get-user-by-token-http
     description: Get a user info by token
-    handler: dist/application/aws/user-handler.getUserByTokenHandler
+    handler: dist/application/aws/get-by-token-handler.getUserByTokenHandler
     iamRoleStatementsName: ${self:provider.stage}-${self:service}-get-user-by-token-role
     iamRoleStatements:
       - Effect: Allow
@@ -216,7 +222,7 @@ functions:
   update-user:
     name: ${self:provider.stage}-${self:service}-put-update-user-http
     description: Update a user info by token
-    handler: dist/application/aws/user-handler.updateUserHandler
+    handler: dist/application/aws/update-handler.updateUserHandler
     iamRoleStatementsName: ${self:provider.stage}-${self:service}-put-update-user-http-role
     iamRoleStatements:
       - Effect: Allow
@@ -255,7 +261,7 @@ functions:
   delete-user:
     name: ${self:provider.stage}-${self:service}-delete-rm-user-http
     description: Delete a by token
-    handler: dist/application/aws/user-handler.deleteUserByTokenHandler
+    handler: dist/application/aws/delete-handler.deleteUserByTokenHandler
     iamRoleStatementsName: ${self:provider.stage}-${self:service}-delete-rm-user-http-role
     #timeout: 10
     iamRoleStatements:
@@ -299,7 +305,7 @@ functions:
   get-user-by-username-password:
     name: ${self:provider.stage}-${self:service}-get-user-by-username-and-pass
     description: Get user by username and password
-    handler: dist/application/aws/user-handler.userGetUsernamePasswordHandler
+    handler: dist/application/aws/signin-handler.userGetUsernamePasswordHandler
     iamRoleStatementsName: ${self:provider.stage}-${self:service}-get-user-by-username-and-pass-role
     iamRoleStatements:
       - Effect: Allow
