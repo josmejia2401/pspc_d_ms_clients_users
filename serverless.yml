@@ -77,11 +77,11 @@ provider:
     serverSideEncryption: AES256
     # Specific tags
     tags:
-      barbapp:application: barbapp
-      barbapp:component: users
-      barbapp:creator: jose.mejia
-      barbapp:domain-name: clients
-      barbapp:layer: application #application, network, integration, storage
+      pspc:application: pspc
+      pspc:component: users
+      pspc:creator: jose.mejia
+      pspc:domain-name: clients
+      pspc:layer: application #application, network, integration, storage
 
   #https://www.serverless.com/framework/docs/providers/aws/guide/serverless.yml/#api-gateway-v1-rest-api-1
   # Use a custom name for the API Gateway API
@@ -108,20 +108,20 @@ provider:
 
   # Global tags
   tags:
-    barbapp:application: barbapp
-    barbapp:component: users
-    barbapp:creator: jose.mejia
-    barbapp:domain-name: clients
-    barbapp:layer: application #application, network, integration, storage
+    pspc:application: pspc
+    pspc:component: users
+    pspc:creator: jose.mejia
+    pspc:domain-name: clients
+    pspc:layer: application #application, network, integration, storage
 
   #stackTags:
-    #barbapp:application-id: barbapp
-    #barbapp:component-id: security-users
-    #barbapp:component-name: security-users
-    #barbapp:creator-name: security-users
-    #barbapp:creator-id: security-users
-    #barbapp:domain-name: security
-    #barbapp:layer: application #storage, network, integration
+    #pspc:application-id: pspc
+    #pspc:component-id: security-users
+    #pspc:component-name: security-users
+    #pspc:creator-name: security-users
+    #pspc:creator-id: security-users
+    #pspc:domain-name: security
+    #pspc:layer: application #storage, network, integration
 
 package:
   # Package this function as an individual artifact (default: false)
@@ -408,7 +408,7 @@ resources:
       Properties:
         AuthorizerResultTtlInSeconds: 0
         Name: "authorizer"
-        AuthorizerUri: !Sub "arn:aws:apigateway:${self:provider.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:${AWS::AccountId}:function:${self:provider.stage}-barbapp-security-auth-post-authorizer/invocations"
+        AuthorizerUri: !Sub "arn:aws:apigateway:${self:provider.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:${AWS::AccountId}:function:${self:provider.stage}-${self:custom.appName}-security-auth-post-authorizer/invocations"
         RestApiId:
           Ref: 'ApiGatewayRestApi'
         Type: "TOKEN"
